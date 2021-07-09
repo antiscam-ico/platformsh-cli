@@ -17,10 +17,10 @@
     },
     {
         "name": "platform.phar",
-        "sha1": "eed491a301763993edc34efed3160ab810387ee2",
-        "sha256": "82bdd2de28fe189c83ba7b79ca1336e3c49b5d00f466018f982fff7b847c15bb",
-        "url": "https://github.com/platformsh/platformsh-cli/releases/download/v3.66.0/platform.phar",
-        "version": "3.66.0",
+        "sha1": "6410e36a047d3ebcbff5cf1baec8570dd2365768",
+        "sha256": "c27912667da8b6c2f7673aaa4af4d8650fc3c86c83eb5d559ef64fce6543dd0a",
+        "url": "https://github.com/platformsh/platformsh-cli/releases/download/v3.67.5/platform.phar",
+        "version": "3.67.5",
         "php": {
             "min": "5.5.9"
         },
@@ -319,6 +319,11 @@
                 "notes": "* Use the 'http://' scheme instead of 'solr://' for Solr service URLs.\n* Add a --default-branch option to the project:create command.\n* Make the default API request timeout configurable through an env var.\n  PLATFORMSH_CLI_DEFAULT_TIMEOUT will override the default of 30 (seconds).",
                 "show from": "3.65.0",
                 "hide from": "3.66.0"
+            },
+            {
+                "notes": "New features (which depend on the upcoming API version 12):\n\n* Support build-time environment-level variables.\n* Some support for environment types (see note below):\n  - Add the type in the `environment:list` (`env`) command.\n  - Mention the type in the environment label.\n  - Add a `--type` option to the `push` command.\n  - Add a `--type` option to the `branch` command.\n  - Allow the type to be modified in the `env:info` command.\n\n> Note: user commands (such as `user:add` and `user:update`) do not yet support\nenvironment types. They will in a future version. The API is backwards\ncompatible: if your project supports environment types, and you change a user's\nrole on an environment, it will change their role on all environments of that\ntype.\n\nOther changes:\n\n* Support new `/users/me` API in the `auth:info` command.\n* Fix `user:update` to avoid recalculating environment access changes while they are made.",
+                "show from": "3.66.0",
+                "hide from": "3.67.0"
             }
         ]
     }

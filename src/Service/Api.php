@@ -235,14 +235,18 @@ class Api
      */
     private function getUserAgent()
     {
-        return sprintf(
-            '%s/%s (%s; %s; PHP %s)',
-            str_replace(' ', '-', $this->config->get('application.name')),
-            $this->config->getVersion(),
-            php_uname('s'),
-            php_uname('r'),
-            PHP_VERSION
-        );
+        $template = $this->config->getWithDefault('api.user_agent', null)
+            ?: '{APP_NAME_DASH}/{VERSION} ({UNAME_S}; {UNAME_R}; PHP {PHP_VERSION})';
+        $replacements = [
+            '{APP_NAME_DASH}' => \str_replace(' ', '-', $this->config->get('application.name')),
+            '{APP_NAME}' => $this->config->get('application.name'),
+            '{APP_SLUG}' => $this->config->get('application.slug'),
+            '{VERSION}' => $this->config->getVersion(),
+            '{UNAME_S}' => \php_uname('s'),
+            '{UNAME_R}' => \php_uname('r'),
+            '{PHP_VERSION}' => PHP_VERSION,
+        ];
+        return \str_replace(\array_keys($replacements), \array_values($replacements), $template);
     }
 
     /**
@@ -721,6 +725,8 @@ class Api
      *
      * @param bool $reset
      *
+     * @deprecated use getUser() if the Auth API (the config key api.auth) is enabled
+     *
      * @return array
      *   An array containing at least 'username', 'id', 'mail', and
      *   'display_name'.
@@ -734,6 +740,29 @@ class Api
         }
 
         return $info;
+    }
+
+    /**
+     * Returns the ID of the current user.
+     *
+     * @return string
+     */
+    public function getMyUserId($reset = false)
+    {
+        if ($this->authApiEnabled()) {
+            return $this->getUser(null, $reset)->id;
+        }
+        return $this->getMyAccount($reset)['id'];
+    }
+
+    /**
+     * Determines if the Auth API can be used, e.g. the getUser() method.
+     *
+     * @return bool
+     */
+    public function authApiEnabled()
+    {
+        return $this->config->getWithDefault('api.auth', false) && $this->config->getWithDefault('api.base_url', '');
     }
 
     /**
@@ -785,8 +814,9 @@ class Api
     /**
      * Get user information.
      *
-     * This is from the /users API which deals with basic authentication
-     * related data.
+     * This is from the /users API which deals with basic authentication-related data.
+     *
+     * @see Api::authApiEnabled()
      *
      * @param string|null $id
      *   The user ID. Defaults to the current user.
@@ -799,8 +829,12 @@ class Api
         if (!$this->config->getWithDefault('api.auth', false)) {
             throw new \BadMethodCallException('api.auth must be enabled for this method');
         }
-        $id = $id ?: $this->getMyAccount()['id']; // @todo achieve this more efficiently
-        $cacheKey = 'user:' . $id;
+        if ($id) {
+            $cacheKey = 'user:' . $id;
+        } else {
+            $id = 'me';
+            $cacheKey = sprintf('%s:me', $this->config->getSessionId());
+        }
         if ($reset || !($data = $this->cache->fetch($cacheKey))) {
             $user = $this->getClient()->getUser($id);
             if (!$user) {
@@ -983,13 +1017,18 @@ class Api
     {
         $id = $environment->id;
         $title = $environment->title;
+        $type = $environment->getProperty('type', false);
         $use_title = strlen($title) > 0 && $title !== $id;
+        $use_type = $type !== null && $type !== $id;
         $pattern = $use_title ? '%2$s (%3$s)' : '%3$s';
         if ($tag !== false) {
             $pattern = $use_title ? '<%1$s>%2$s</%1$s> (%3$s)' : '<%1$s>%3$s</%1$s>';
         }
+        if ($use_type) {
+            $pattern .= $tag !== false ? ' (type: <%1$s>%4$s</%1$s>)' : ' (type: %4$s)';
+        }
 
-        return sprintf($pattern, $tag, $title, $id);
+        return sprintf($pattern, $tag, $title, $id, $type);
     }
 
     /**
@@ -1045,7 +1084,7 @@ class Api
         // If there is no token, or it has expired, make an API request, which
         // automatically obtains a token and saves it to the session.
         if (!$token || $expires < time()) {
-            $this->getMyAccount(true);
+            $this->getMyUserId(true);
             if (!$token = $session->get('accessToken')) {
                 throw new \RuntimeException('No access token found');
             }
@@ -1057,11 +1096,27 @@ class Api
     /**
      * Get the authenticated HTTP client.
      *
+     * This will throw an exception if the user is not logged in, if there is no login event subscriber registered.
+     *
+     * @see Api::getExternalHttpClient()
+     *
      * @return ClientInterface
      */
     public function getHttpClient()
     {
         return $this->getClient()->getConnector()->getClient();
+    }
+
+    /**
+     * Get a new HTTP client instance for external APIs, without Platform.sh authentication.
+     *
+     * @see Api::getHttpClient()
+     *
+     * @return ClientInterface
+     */
+    public function getExternalHttpClient()
+    {
+        return new Client($this->getGuzzleOptions());
     }
 
     /**
